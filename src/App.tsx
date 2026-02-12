@@ -898,7 +898,7 @@ function App() {
           </div>
 
           <h1 className="mint-title">{renderDgen1Wordmark(ENV.nftName)}</h1>
-          <p className="mint-subtitle">Secure your spot in the future of mobile</p>
+          <p className="mint-subtitle">Purchase a dGEN1. Batch 3 devices ship in Q2 of 2026.</p>
 
           {/* Referral Discount Banner */}
           {hasValidReferral && (
