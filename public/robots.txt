@@ -1,0 +1,12 @@
+# robots.txt for dGEN1 Reservation Site
+# https://mint.freedomfactory.io
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://mint.freedomfactory.io/sitemap.xml
+
+# Disallow common non-content paths
+Disallow: /assets/
+
