@@ -1576,7 +1576,7 @@ function App() {
           <a href={ENV.twitterUrl} target="_blank" rel="noopener noreferrer">Twitter</a>
           <a href={ENV.discordUrl} target="_blank" rel="noopener noreferrer">Discord</a>
         </div>
-        <p className="footer-text">© 2025 Freedom Factory</p>
+        <p className="footer-text">© 2026 Freedom Factory</p>
       </footer>
 
       {/* Share Popup */}
