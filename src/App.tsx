@@ -3,6 +3,7 @@ import { encodeFunctionData, parseUnits } from 'viem'
 import { useAccount, useDisconnect, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useChainId } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { DaimoPayButton, useDaimoPayUI } from '@daimo/pay'
+import { CreditCardCheckout } from './components/CreditCardCheckout'
 import { ENV } from './config/env'
 import { targetChain } from './config/wagmi'
 import { trackConversion } from './hooks/useAnalytics'
@@ -1108,6 +1109,29 @@ function App() {
             </button>
           )}
 
+          {/* Credit Card Buy & Burn via Crossmint */}
+          {/* No wallet needed -- Crossmint creates a custodial wallet, mints to it,
+              then the backend burns the NFT via Crossmint Wallets API after shipping
+              info is collected. */}
+          {canMint && !ENV.isTestnet && ENV.crossmintApiKey && ENV.crossmintCollectionId && ENV.crossmintBuyAndBurnApiUrl && (
+            <>
+              <div className="payment-divider">
+                <span className="payment-divider-line" />
+                <span className="payment-divider-text">or</span>
+                <span className="payment-divider-line" />
+              </div>
+              <CreditCardCheckout
+                mintQuantity={mintQuantity}
+                currentUsdcPrice={currentUsdcPrice}
+                eligibleReferralAddress={eligibleReferralAddress}
+                walletAddress={address}
+                onPurchaseComplete={() => {
+                  trackConversion(currentUsdcPrice)
+                }}
+              />
+            </>
+          )}
+
           {/* Wallet Connection for referral link generation */}
           {isConnected ? (
             <button className="disconnect-btn" onClick={() => disconnect()}>
@@ -1127,7 +1151,9 @@ function App() {
           <p className="mint-info">
             {ENV.isTestnet 
               ? `🧪 TESTNET MODE • Price: ${currentUsdcPrice} MockUSDC`
-              : 'Pay with any token • Any chain • Instant confirmation'
+              : ENV.crossmintApiKey
+                ? 'Pay with crypto or credit card • Any chain • Instant confirmation'
+                : 'Pay with any token • Any chain • Instant confirmation'
             }
           </p>
 

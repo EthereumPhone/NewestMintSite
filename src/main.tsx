@@ -11,7 +11,9 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { DaimoPayProvider } from '@daimo/pay'
+import { CrossmintProvider } from '@crossmint/client-sdk-react-ui'
 import { config, targetChain } from './config/wagmi'
+import { ENV } from './config/env'
 import '@rainbow-me/rainbowkit/styles.css'
 import './index.css'
 import App from './App.tsx'
@@ -23,11 +25,17 @@ createRoot(document.getElementById('root')!).render(
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider initialChain={targetChain}>
-        <DaimoPayProvider 
+        <DaimoPayProvider
           theme="soft"
           mode="dark"
         >
-    <App />
+          {ENV.crossmintApiKey ? (
+            <CrossmintProvider apiKey={ENV.crossmintApiKey}>
+              <App />
+            </CrossmintProvider>
+          ) : (
+            <App />
+          )}
         </DaimoPayProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

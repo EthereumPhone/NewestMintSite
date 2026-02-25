@@ -33,6 +33,11 @@ export const ENV = {
   
   // Quote tweet link (added to end of share tweets)
   quoteTweetUrl: import.meta.env.VITE_QUOTE_TWEET_URL || '',
+
+  // Crossmint (credit card payments)
+  crossmintApiKey: import.meta.env.VITE_CROSSMINT_CLIENT_API_KEY || '',
+  crossmintCollectionId: import.meta.env.VITE_CROSSMINT_COLLECTION_ID || '',
+  crossmintBuyAndBurnApiUrl: import.meta.env.VITE_CROSSMINT_BUY_AND_BURN_API_URL || '',
 } as const
 
 // Validate required environment variables

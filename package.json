@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@crossmint/client-sdk-react-ui": "^2.6.17",
     "@daimo/pay": "^1.19.6",
     "@daimo/pay-common": "^1.19.1",
     "@rainbow-me/rainbowkit": "^2.2.10",

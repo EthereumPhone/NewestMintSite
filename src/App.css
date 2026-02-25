@@ -418,6 +418,55 @@ body {
   cursor: not-allowed;
 }
 
+/* Payment Divider */
+.payment-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.payment-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.payment-divider-text {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Credit Card Button (Crossmint) */
+.credit-card-btn {
+  width: 100%;
+  padding: 1.25rem 2rem;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.credit-card-btn:hover {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.credit-card-btn:disabled {
+  color: var(--text-dim);
+  border-color: var(--text-dim);
+  cursor: not-allowed;
+}
+
 /* Mint Info */
 .mint-info {
   text-align: left;
