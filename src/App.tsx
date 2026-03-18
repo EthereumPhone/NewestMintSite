@@ -7,7 +7,22 @@ import { useDaimoSession } from './hooks/useDaimoSession'
 import { CreditCardCheckout } from './components/CreditCardCheckout'
 import { ENV } from './config/env'
 import { targetChain } from './config/wagmi'
-import { trackConversion } from './hooks/useAnalytics'
+import {
+  trackConversion,
+  trackWalletConnected,
+  trackWalletDisconnected,
+  trackQuantityChange,
+  trackReserveClicked,
+  trackCheckoutOpened,
+  trackCheckoutAbandoned,
+  trackCreditCardClicked,
+  trackReferralLanding,
+  trackReferralCopied,
+  trackReferralShared,
+  trackRedemptionStarted,
+  trackRedemptionConfirmed,
+  trackRedemptionCompleted,
+} from './hooks/useAnalytics'
 import {
   useNFTContractData,
   useCanMint,
@@ -134,6 +149,24 @@ function App() {
       nftContractAddress: ENV.nftContractAddress,
     })
   }, [totalMintedNum, remainingSupplyNum, maxSupplyNum, saleActive, mintPriceUsdc, discountedPriceUsdc, isLoading, isError])
+
+  // Analytics: track wallet connect/disconnect
+  const prevConnectedRef = useRef(isConnected)
+  useEffect(() => {
+    if (isConnected && !prevConnectedRef.current && address) {
+      trackWalletConnected(address)
+    } else if (!isConnected && prevConnectedRef.current) {
+      trackWalletDisconnected()
+    }
+    prevConnectedRef.current = isConnected
+  }, [isConnected, address])
+
+  // Analytics: track referral landing
+  useEffect(() => {
+    if (referralAddress) {
+      trackReferralLanding(referralAddress)
+    }
+  }, [referralAddress])
 
   // Referral address from URL, excluding self-referrals once wallet is known
   const eligibleReferralAddress = useMemo(() => {
@@ -389,6 +422,7 @@ function App() {
   const copyReferralLink = () => {
     navigator.clipboard.writeText(referralLink)
     setCopied(true)
+    trackReferralCopied('panel')
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -400,6 +434,7 @@ function App() {
   // Handle reserve button click - creates a Daimo session on demand
   const handleReserveClick = useCallback(async () => {
     if (!address || !mintCalldata) return
+    trackReserveClicked(mintQuantity, currentUsdcPrice)
     try {
       await createDaimoSession({
         toAddress: ENV.nftContractAddress,
@@ -410,10 +445,11 @@ function App() {
         title: 'Reserve dGEN1',
         verb: 'Reserve',
       })
+      trackCheckoutOpened(mintQuantity, currentUsdcPrice)
     } catch (err) {
       console.error('Failed to create Daimo session:', err)
     }
-  }, [address, mintCalldata, currentUsdcPrice, createDaimoSession])
+  }, [address, mintCalldata, currentUsdcPrice, mintQuantity, createDaimoSession])
 
   // Handle payment completion from Daimo Pay
   const handlePaymentCompleted = useCallback(() => {
@@ -429,8 +465,8 @@ function App() {
     // Show success/share popup
     setShowSharePopup(true)
 
-    // Track conversion in Matomo
-    trackConversion(currentUsdcPrice)
+    // Track conversion in Matomo (ecommerce order + goal)
+    trackConversion(currentUsdcPrice, mintQuantity)
 
     // Clear Daimo session and reset guard after a delay
     setTimeout(() => {
@@ -453,6 +489,7 @@ function App() {
   const copyReferralLinkPopup = () => {
     navigator.clipboard.writeText(referralLink)
     setPopupCopied(true)
+    trackReferralCopied('popup')
     setTimeout(() => setPopupCopied(false), 2000)
   }
 
@@ -574,6 +611,7 @@ function App() {
   // Handle redemption initiation (supports both single and batch)
   const handleStartRedemption = useCallback(async (tokenIdsToRedeem: number[]) => {
     if (!address || tokenIdsToRedeem.length === 0) return
+    trackRedemptionStarted(tokenIdsToRedeem.length)
 
     // Switch chain if needed
     if (isWrongChain) {
@@ -637,11 +675,12 @@ function App() {
   // After redeem confirms, show shipping form
   useEffect(() => {
     if (isRedeemConfirmed && redemptionStep === 'redeeming') {
+      trackRedemptionConfirmed(redemptionTokenIds.length)
       setRedemptionStep('shipping')
       refetchRedemption()
       refetchUserToken()
     }
-  }, [isRedeemConfirmed, redemptionStep, refetchRedemption, refetchUserToken])
+  }, [isRedeemConfirmed, redemptionStep, redemptionTokenIds.length, refetchRedemption, refetchUserToken])
 
   // Handle redemption error (user rejected tx or other error)
   useEffect(() => {
@@ -732,6 +771,7 @@ function App() {
 
       // Clear localStorage on success
       localStorage.removeItem(PENDING_REDEMPTION_KEY)
+      trackRedemptionCompleted(redemptionTokenIds.length)
       setRedemptionStep('success')
     } catch (e) {
       console.error('Shipping submission failed:', e)
@@ -926,7 +966,7 @@ function App() {
             <div className="quantity-controls">
               <button
                 className="quantity-btn"
-                onClick={() => setMintQuantity(q => Math.max(1, q - 1))}
+                onClick={() => setMintQuantity(q => { const v = Math.max(1, q - 1); trackQuantityChange(v); return v })}
                 disabled={mintQuantity <= 1}
               >
                 −
@@ -934,7 +974,7 @@ function App() {
               <span className="quantity-value">{mintQuantity}</span>
               <button
                 className="quantity-btn"
-                onClick={() => setMintQuantity(q => Math.min(maxMintQuantity, q + 1))}
+                onClick={() => setMintQuantity(q => { const v = Math.min(maxMintQuantity, q + 1); trackQuantityChange(v); return v })}
                 disabled={mintQuantity >= maxMintQuantity}
               >
                 +
@@ -1005,7 +1045,10 @@ function App() {
                         sessionId={daimoSession.sessionId}
                         clientSecret={daimoSession.clientSecret}
                         onPaymentCompleted={handlePaymentCompleted}
-                        onClose={clearDaimoSession}
+                        onClose={() => {
+                          if (!paymentHandledRef.current) trackCheckoutAbandoned()
+                          clearDaimoSession()
+                        }}
                       />
                     )}
                   </>
@@ -1058,7 +1101,10 @@ function App() {
                 eligibleReferralAddress={eligibleReferralAddress}
                 walletAddress={address}
                 onPurchaseComplete={() => {
-                  trackConversion(currentUsdcPrice)
+                  trackConversion(currentUsdcPrice, mintQuantity)
+                }}
+                onCheckoutStarted={() => {
+                  trackCreditCardClicked(currentUsdcPrice)
                 }}
               />
             </>
@@ -1134,6 +1180,7 @@ function App() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="share-btn share-twitter"
+                    onClick={() => trackReferralShared('twitter', 'panel')}
                   >
                     Share on X
                   </a>
@@ -1589,6 +1636,7 @@ function App() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="share-popup-btn share-popup-twitter"
+                  onClick={() => trackReferralShared('twitter', 'popup')}
                 >
                   Share on X
                 </a>
@@ -1597,6 +1645,7 @@ function App() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="share-popup-btn share-popup-telegram"
+                  onClick={() => trackReferralShared('telegram', 'popup')}
                 >
                   Share on Telegram
                 </a>

@@ -40,6 +40,7 @@ interface CreditCardCheckoutProps {
   eligibleReferralAddress: string | undefined
   walletAddress: string | undefined // from connected wallet, if any
   onPurchaseComplete?: () => void
+  onCheckoutStarted?: () => void
 }
 
 // Inner component that uses the useCrossmintCheckout hook
@@ -49,6 +50,7 @@ function CheckoutInner({
   eligibleReferralAddress,
   walletAddress,
   onPurchaseComplete,
+  onCheckoutStarted,
 }: CreditCardCheckoutProps) {
   const { order } = useCrossmintCheckout()
 
@@ -243,6 +245,8 @@ function CheckoutInner({
   // Idle: show checkout button
   if (flowStep === 'idle') {
     return (
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+      <div onClick={() => onCheckoutStarted?.()}>
       <CrossmintHostedCheckout
         lineItems={{
           collectionLocator: `crossmint:${ENV.crossmintCollectionId}`,
@@ -270,6 +274,7 @@ function CheckoutInner({
       >
         PAY WITH CREDIT CARD
       </CrossmintHostedCheckout>
+      </div>
     )
   }
 
