@@ -8,7 +8,6 @@ import {
   coinbaseWallet,
   injectedWallet,
 } from '@rainbow-me/rainbowkit/wallets'
-import { getDefaultConfig } from '@daimo/pay'
 import { ENV } from './env'
 
 // Shared app metadata for wallets
@@ -47,24 +46,14 @@ const rainbowKitConnectors = connectorsForWallets(
   }
 )
 
-// Get Daimo Pay's default config for chains and transports
-const daimoConfig = getDefaultConfig({
-  appName,
-  appDescription,
-  appUrl,
-  chains: [targetChain],
-})
-
-// Destructure to exclude `client` and `connectors` - we'll use our own connectors
-const { client: _client, connectors: _daimoConnectors, ...daimoConfigBase } = daimoConfig
-
-// Create wagmi config combining Daimo's chain setup with RainbowKit's connectors
+// Create wagmi config with RainbowKit connectors
+// Transports must cover all possible chain IDs in the union type
 export const config = createConfig({
-  ...daimoConfigBase,
+  chains: [targetChain],
   connectors: rainbowKitConnectors,
   transports: {
-    ...daimoConfig.transports,
-    [targetChain.id]: customTransport,
+    [base.id]: customTransport,
+    [baseSepolia.id]: customTransport,
   },
 })
 

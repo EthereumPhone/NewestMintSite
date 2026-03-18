@@ -12,8 +12,8 @@ export const ENV = {
   nftMaxSupply: Number(import.meta.env.VITE_NFT_MAX_SUPPLY) || 10000,
   nftMaxPerTx: Number(import.meta.env.VITE_NFT_MAX_PER_TX) || 10,
   
-  // Daimo Pay
-  daimoAppId: import.meta.env.VITE_DAIMO_APP_ID || '',
+  // Daimo Pay - backend endpoint that creates sessions via Daimo API
+  daimoSessionApiUrl: import.meta.env.VITE_DAIMO_SESSION_API_URL || '',
   
   // Chain & RPC
   chainId: Number(import.meta.env.VITE_CHAIN_ID) || 8453, // Base mainnet
@@ -42,7 +42,7 @@ export const ENV = {
 
 // Validate required environment variables
 export function validateEnv() {
-  const required = ['VITE_NFT_CONTRACT_ADDRESS', 'VITE_DAIMO_APP_ID']
+  const required = ['VITE_NFT_CONTRACT_ADDRESS', 'VITE_DAIMO_SESSION_API_URL']
   const missing = required.filter(key => !import.meta.env[key])
   
   if (missing.length > 0) {

@@ -2,7 +2,8 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { encodeFunctionData, parseUnits } from 'viem'
 import { useAccount, useDisconnect, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useChainId } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
-import { DaimoPayButton, useDaimoPayUI } from '@daimo/pay'
+import { DaimoModal } from '@daimo/sdk/web'
+import { useDaimoSession } from './hooks/useDaimoSession'
 import { CreditCardCheckout } from './components/CreditCardCheckout'
 import { ENV } from './config/env'
 import { targetChain } from './config/wagmi'
@@ -100,7 +101,6 @@ function App() {
   const [referralAddress] = useState<string | null>(getReferralFromURL)
   const [copied, setCopied] = useState(false)
   const [showSharePopup, setShowSharePopup] = useState(false)
-  const [daimoResetKey, setDaimoResetKey] = useState(0)
   const paymentHandledRef = useRef(false)
   const [popupCopied, setPopupCopied] = useState(false)
   const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -148,10 +148,8 @@ function App() {
   // Mint quantity selector (maxMintQuantity is computed later after remaining is defined)
   const [mintQuantity, setMintQuantity] = useState(1)
   
-  // Daimo Pay UI hook - used to reset payment when quantity changes
-  // Per Daimo docs: "Once DaimoPayButton is rendered, its payment parameters are frozen.
-  // If your app needs to dynamically update the payment, use the resetPayment function."
-  const { resetPayment } = useDaimoPayUI()
+  // Daimo Pay session management
+  const { session: daimoSession, isCreating: isDaimoCreating, createSession: createDaimoSession, clearSession: clearDaimoSession } = useDaimoSession(ENV.daimoSessionApiUrl)
 
   // Debug: Log hasMinted check
   useEffect(() => {
@@ -399,79 +397,26 @@ function App() {
     setCopied(false)
   }, [address])
 
-  // Refs to store latest values - these are always current when setTimeout fires
-  const latestValuesRef = useRef({
-    mintQuantity,
-    currentUsdcPrice,
-    mintCalldata,
-    address,
-  })
-  
-  // Update refs on EVERY render so they always have the latest values
-  latestValuesRef.current = {
-    mintQuantity,
-    currentUsdcPrice,
-    mintCalldata,
-    address,
-  }
-
-  // Track if we've done the initial render
-  const isFirstRender = useRef(true)
-  const prevQuantityRef = useRef(mintQuantity)
-
-  // Debounced resetPayment call - ONLY runs when mintQuantity changes
-  useEffect(() => {
-    // Skip on first render
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-
-    // Only proceed if quantity actually changed
-    if (prevQuantityRef.current === mintQuantity) {
-      return
-    }
-
-    // Update the ref
-    prevQuantityRef.current = mintQuantity
-
-    // Debounce: wait 200ms after the last change before calling resetPayment
-    const timeoutId = setTimeout(() => {
-      // Read from refs to get the LATEST values (not stale closure values)
-      const latest = latestValuesRef.current
-      
-      if (!latest.address || !latest.mintCalldata) {
-        return
-      }
-
-      console.log('[QUANTITY CHANGE] Calling resetPayment with:', {
-        quantity: latest.mintQuantity,
-        price: latest.currentUsdcPrice.toFixed(6),
+  // Handle reserve button click - creates a Daimo session on demand
+  const handleReserveClick = useCallback(async () => {
+    if (!address || !mintCalldata) return
+    try {
+      await createDaimoSession({
+        toAddress: ENV.nftContractAddress,
+        chainId: ENV.chainId,
+        tokenAddress: ENV.paymentTokenAddress,
+        amountUnits: currentUsdcPrice.toFixed(6),
+        calldata: mintCalldata,
+        title: 'Reserve dGEN1',
+        verb: 'Reserve',
       })
-      resetPayment({
-        toUnits: latest.currentUsdcPrice.toFixed(6),
-        toCallData: latest.mintCalldata,
-      })
-    }, 200)
-
-    // Cleanup: cancel the timeout if quantity changes again before 200ms
-    return () => clearTimeout(timeoutId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mintQuantity]) // Only trigger on quantity change - latest values come from ref
-
-  // Debug: Log when payment parameters change
-  useEffect(() => {
-    console.log('[DAIMO PAYMENT] Payment params:', {
-      mintQuantity,
-      price: currentUsdcPrice.toFixed(2),
-      address,
-    })
-  }, [mintQuantity, currentUsdcPrice, address])
+    } catch (err) {
+      console.error('Failed to create Daimo session:', err)
+    }
+  }, [address, mintCalldata, currentUsdcPrice, createDaimoSession])
 
   // Handle payment completion from Daimo Pay
-  // The event object matches webhook events, not a hide() method
-  // Modal closing is handled by the closeOnSuccess prop
-  const handlePaymentCompleted = useCallback((event: unknown) => {
+  const handlePaymentCompleted = useCallback(() => {
     // Guard against duplicate calls (e.g., when button remounts)
     if (paymentHandledRef.current) {
       console.log('Payment already handled, ignoring duplicate callback')
@@ -479,7 +424,7 @@ function App() {
     }
     paymentHandledRef.current = true
 
-    console.log('Mint completed via Daimo Pay!', event)
+    console.log('Mint completed via Daimo Pay!')
 
     // Show success/share popup
     setShowSharePopup(true)
@@ -487,18 +432,10 @@ function App() {
     // Track conversion in Matomo
     trackConversion(currentUsdcPrice)
 
-    // Reset Daimo Pay button after 3 seconds (forces remount with fresh state)
+    // Clear Daimo session and reset guard after a delay
     setTimeout(() => {
-      setDaimoResetKey(k => k + 1)
-      // Also call resetPayment to clear Daimo's internal state
-      resetPayment({
-        toUnits: currentUsdcPrice.toFixed(6),
-        toCallData: mintCalldata,
-      })
-      // Reset guard after button has remounted
-      setTimeout(() => {
-        paymentHandledRef.current = false
-      }, 100)
+      clearDaimoSession()
+      paymentHandledRef.current = false
     }, 3000)
 
     // Refetch user token data to enable redemption UI and referral link
@@ -510,7 +447,7 @@ function App() {
       await Promise.all([refetchUserToken(), refetchCanMint()])
     }
     refreshData()
-  }, [currentUsdcPrice, refetchUserToken, refetchCanMint, resetPayment, mintCalldata])
+  }, [currentUsdcPrice, refetchUserToken, refetchCanMint, clearDaimoSession])
 
   // Copy referral link in popup
   const copyReferralLinkPopup = () => {
@@ -1050,35 +987,30 @@ function App() {
               </button>
             ) : (
               // MAINNET MODE: Daimo Pay
-              // Only render DaimoPayButton when price data is loaded AND we know the recipient address.
-              // Payment parameters are updated via resetPayment() when quantity changes.
+              // Session is created on-demand when user clicks RESERVE NOW.
+              // Quantity/price changes are picked up automatically since the session
+              // is created fresh each time.
               mintPriceUsdc !== undefined ? (
                 address && mintCalldata ? (
-                  <DaimoPayButton.Custom
-                    // Key changes when address changes (wallet switch) or after successful payment.
-                    // Quantity/price changes are handled by resetPayment() from useDaimoPayUI hook.
-                    key={`daimo-${address}-${daimoResetKey}`}
-                    appId={ENV.daimoAppId}
-                    toChain={ENV.chainId}
-                    toToken={ENV.paymentTokenAddress}
-                    toUnits={currentUsdcPrice.toFixed(6)}
-                    toAddress={ENV.nftContractAddress}
-                    toCallData={mintCalldata}
-                    intent="Reserve dGEN1"
-                    closeOnSuccess={true}
-                    onPaymentCompleted={handlePaymentCompleted}
-                  >
-                    {({ show }) => (
-                      <button 
-                        className={`mint-btn ${isAlmostGone ? 'mint-btn-urgent' : ''}`}
-                        onClick={show}
-                      >
-                        RESERVE NOW
-                      </button>
+                  <>
+                    <button
+                      className={`mint-btn ${isAlmostGone ? 'mint-btn-urgent' : ''}`}
+                      onClick={handleReserveClick}
+                      disabled={isDaimoCreating}
+                    >
+                      {isDaimoCreating ? 'Loading...' : 'RESERVE NOW'}
+                    </button>
+                    {daimoSession && (
+                      <DaimoModal
+                        sessionId={daimoSession.sessionId}
+                        clientSecret={daimoSession.clientSecret}
+                        onPaymentCompleted={handlePaymentCompleted}
+                        onClose={clearDaimoSession}
+                      />
                     )}
-                  </DaimoPayButton.Custom>
+                  </>
                 ) : (
-                  <button 
+                  <button
                     className={`mint-btn ${isAlmostGone ? 'mint-btn-urgent' : ''}`}
                     onClick={() => openConnectModal?.()}
                     disabled={!openConnectModal}
@@ -1087,7 +1019,7 @@ function App() {
                   </button>
                 )
               ) : (
-                <button 
+                <button
                   className={`mint-btn ${isAlmostGone ? 'mint-btn-urgent' : ''}`}
                   disabled={true}
                 >
